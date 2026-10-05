@@ -23,7 +23,7 @@ dmg=build/Lookout.dmg
 if gh release view "$tag" -R "$repo" >/dev/null 2>&1; then echo "$tag is already released."; exit 1; fi
 
 ./build.sh
-codesign -dv build/Lookout.app 2>&1 | grep -q "Authority=Developer ID Application" || { echo "Not signed with the Developer ID."; exit 1; }
+codesign -dvv build/Lookout.app 2>&1 | grep -q "Authority=Developer ID Application" || { echo "Not signed with the Developer ID."; exit 1; }
 
 stage=build/dmg
 rm -rf "$stage" "$dmg"
