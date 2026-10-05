@@ -3,6 +3,10 @@
   <img src="docs/banner-light.png" alt="Lookout: know the moment your agents need you. A macOS menu bar app that watches Claude Code, Codex, and Cursor, and tells you when one finishes or is waiting.">
 </picture>
 
+<p align="center">
+  <a href="https://github.com/HMDRAMS-DEV/lookout/releases/latest"><b>Download for macOS</b></a>
+</p>
+
 Lookout sits in your menu bar and keeps track of every coding agent you have running. When one finishes or stops to ask you something, it notifies you. Click a session to jump straight to it.
 
 ## What you get
@@ -24,7 +28,7 @@ Lookout reads only local files. It has no account, server, or analytics, and mak
 
 Plain chat windows in the Claude and ChatGPT apps aren't tracked, since they leave nothing on disk.
 
-## Build
+## Build from source
 
 Lookout builds with the Command Line Tools. No Xcode project.
 
@@ -33,7 +37,7 @@ Lookout builds with the Command Line Tools. No Xcode project.
 open build/Lookout.app
 ```
 
-Requires macOS 15 or later on Apple silicon. The first time you click a Terminal session, macOS asks whether Lookout may control Terminal. That permission is what lets it select the right tab.
+Lookout requires macOS 15 or later on Apple silicon. The first time you click a Terminal session, macOS asks whether Lookout may control Terminal. That permission is what lets it select the right tab.
 
 ## License
 

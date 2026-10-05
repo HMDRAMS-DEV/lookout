@@ -17,11 +17,18 @@ xcrun swiftc -O -sdk "$sdk" -parse-as-library -swift-version 6 -target arm64-app
     -module-name Lookout -o "$app/Contents/MacOS/Lookout" \
     $(find "$here/Lookout" -name '*.swift')
 
-# Automation permission (for selecting Terminal tabs) is tied to the signature. An ad-hoc signature
-# changes on every build, so prefer a stable local certificate when one exists.
-identity=-
-for name in "Lookout Local Signing" "Tapestry Local Signing"; do
-    if security find-identity -p codesigning | grep -q "\"$name\""; then identity="$name"; break; fi
-done
-codesign --force --sign "$identity" --identifier dev.lookout.Lookout "$app"
+# Prefer the Developer ID, which notarization needs. Without it, use a stable local certificate:
+# Automation permission (for selecting Terminal tabs) is tied to the signature, and an ad-hoc
+# signature changes on every build.
+developer_id="Developer ID Application: HMDFV Inc. (8Z6WRF99H5)"
+if security find-identity -v -p codesigning | grep -q "\"$developer_id\""; then
+    codesign --force --timestamp --options runtime --entitlements "$here/Lookout/Lookout.entitlements" \
+        --sign "$developer_id" --identifier dev.lookout.Lookout "$app"
+else
+    identity=-
+    for name in "Lookout Local Signing" "Tapestry Local Signing"; do
+        if security find-identity -p codesigning | grep -q "\"$name\""; then identity="$name"; break; fi
+    done
+    codesign --force --sign "$identity" --identifier dev.lookout.Lookout "$app"
+fi
 echo "built $app"
