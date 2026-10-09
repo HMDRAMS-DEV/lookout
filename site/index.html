@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lookout: menu bar notifications for coding agents on macOS</title>
+<meta name="description" content="A small macOS menu bar app that tells you when Claude Code, Codex, or Cursor finishes or is waiting on you. Click to jump straight to it.">
+<meta property="og:title" content="Lookout: menu bar notifications for coding agents on macOS">
+<meta property="og:description" content="A small macOS menu bar app that tells you when Claude Code, Codex, or Cursor finishes or is waiting on you. Click to jump straight to it.">
+<meta property="og:image" content="/assets/og.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/assets/favicon.png" media="(prefers-color-scheme: light)">
+<link rel="icon" href="/assets/favicon-dark.png" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="/assets/icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FFFFFF; --panel: #F2F1EF; --card: #FFFFFF; --ink: #000000; --text: #333333; --muted: #7A7A7A; --faint: #B5B5B5;
+    --line: #E2E2E2; --button: #000000; --button-ink: #FFFFFF; --wash: rgba(0,0,0,.05);
+    --blue: #2563EB; --amber: #D97706; --green: #16A34A; --claude: #D97757;
+    --accent: #2563EB;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141414; --panel: #1C1C1C; --card: #262626; --ink: #FFFFFF; --text: #D6D6D6; --muted: #9A9A9A; --faint: #5A5A5A;
+      --line: #2C2C2C; --button: #FFFFFF; --button-ink: #000000; --wash: rgba(255,255,255,.07);
+      --blue: #5B8DEF; --amber: #FBBF24; --green: #4ADE80; --claude: #E08A6D;
+      --accent: #5B8DEF;
+      color-scheme: dark;
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  img { display: block; }
+  a { color: inherit; text-decoration: none; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  /* Nav */
+  .nav { display: flex; justify-content: space-between; align-items: center; padding: 25px 46px 0; font-size: 16px; line-height: 20px; }
+  .nav-brand { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 500; transition: opacity .15s ease; }
+  .nav-brand img { width: 24px; height: 24px; }
+  .nav-brand:hover { opacity: .6; }
+  .nav-source { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: var(--muted); transition: color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease); }
+  .nav-source svg { width: 20px; height: 20px; }
+  .nav-source:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 6%, transparent); transform: rotate(-8deg) scale(1.06); }
+
+  /* Hero */
+  .hero { text-align: center; padding-top: 112px; }
+  .hero h1 { max-width: 900px; margin: 0 auto; font-size: 72px; line-height: 76px; font-weight: 700; letter-spacing: -0.025em; }
+  .hero .sub { max-width: 680px; margin: 20px auto 0; font-size: 24px; line-height: 32px; color: var(--muted); letter-spacing: -0.005em; }
+  .buttons { display: flex; justify-content: center; gap: 14px; margin-top: 55px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; height: 53px; border-radius: 999px;
+    font-size: 15px; font-weight: 500; white-space: nowrap; transition: transform .2s var(--ease), background .2s var(--ease); }
+  .btn:hover { transform: scale(1.03); }
+  .btn:active { transform: scale(.97); }
+  .btn svg { width: 18px; height: 18px; }
+  .btn-get { width: 200px; background: var(--button); color: var(--button-ink); }
+  @media (hover: hover) { .btn-get:hover { background: var(--accent); color: #fff; } }
+  .btn-secondary { width: 195px; background: var(--bg); color: var(--ink); border: 1.5px solid var(--line); }
+  .req { margin: 18px 0 0; font-size: 14px; color: var(--muted); }
+
+  /* Popover recreation */
+  .showcase { margin: 90px auto 0; padding: 0 46px; max-width: 1180px; }
+  .backdrop { border-radius: 28px; background: var(--panel); padding: 64px 24px; display: grid; justify-items: center; }
+  .pop { width: 100%; max-width: 380px; border-radius: 22px; background: var(--card); padding: 18px 16px 16px; text-align: left;
+    box-shadow: 0 30px 80px rgba(0,0,0,.14), 0 0 0 1px rgba(0,0,0,.06); }
+  .pop-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 4px; }
+  .wm { display: flex; align-items: baseline; gap: 6px; font-size: 22px; font-weight: 600; letter-spacing: -0.03em; }
+  .wm i { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); }
+  .pop-head small { font-size: 13px; color: var(--muted); }
+  .sec { margin: 16px 4px 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .rows { display: grid; gap: 6px; }
+  .row { position: relative; display: flex; align-items: center; gap: 12px; padding: 9px 12px 9px 10px; border-radius: 12px; background: var(--wash); box-shadow: inset 0 0 0 1px var(--line); }
+  .row.waiting::before { content: ''; position: absolute; left: -16px; top: 12px; bottom: 12px; width: 3px; border-radius: 2px; background: var(--amber); }
+  .tile { position: relative; flex: none; width: 34px; height: 34px; border-radius: 9px; background: var(--wash); display: grid; place-items: center; font-size: 17px; font-weight: 700; color: var(--ink); }
+  .tile.cl { color: var(--claude); background: color-mix(in srgb, var(--claude) 14%, transparent); }
+  .tile .st { position: absolute; right: -4px; bottom: -4px; width: 13px; height: 13px; border-radius: 50%; border: 2px solid var(--card); }
+  .st.waiting { background: var(--amber); }
+  .st.running { background: var(--blue); }
+  .st.done { background: var(--green); }
+  .running .st { animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue) 25%, transparent); } }
+  .info { min-width: 0; flex: 1; }
+  .info b { display: block; font-size: 14px; line-height: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .info span { display: block; font-size: 12px; line-height: 16px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .time { flex: none; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .waiting .time { color: var(--amber); } .running .time { color: var(--blue); } .done .time { color: var(--green); }
+
+  /* Points */
+  .points { max-width: 1180px; margin: 150px auto 0; padding: 0 46px; display: grid; gap: 140px; }
+  .point { display: grid; grid-template-columns: 1.25fr 1fr; gap: 80px; align-items: center; }
+  .point:nth-child(even) .visual { order: 2; }
+  .visual { position: relative; height: 400px; border-radius: 28px; background: var(--panel); overflow: hidden; display: grid; place-items: center; padding: 0 24px; }
+  .label { margin: 0; font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+  .point h2 { margin: 14px 0 0; font-size: 40px; line-height: 44px; font-weight: 700; letter-spacing: -0.025em; }
+  .point p { margin: 16px 0 0; font-size: 18px; line-height: 26px; color: var(--muted); max-width: 400px; }
+  .copy > * { opacity: 0; transform: translateY(14px); filter: blur(6px); transition: all .9s var(--ease); }
+  .copy > :nth-child(2) { transition-delay: .08s; }
+  .copy > :nth-child(3) { transition-delay: .16s; }
+  .point.seen .copy > * { opacity: 1; transform: none; filter: none; }
+
+  .mini { width: 100%; max-width: 340px; display: grid; gap: 14px; }
+  .toast { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--card); box-shadow: 0 18px 40px -16px rgba(0,0,0,.25), 0 0 0 1px rgba(0,0,0,.05); }
+  .toast .app { flex: none; width: 36px; height: 36px; border-radius: 9px; }
+  .toast .info b { font-size: 14px; } .toast .info span { font-size: 13px; }
+  .point.seen .toast.t1 { animation: drop 6s var(--ease) infinite; }
+  @keyframes drop { 0% { opacity: 0; transform: translateY(-14px); } 8%, 92% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+  .bar { display: flex; align-items: center; justify-content: flex-end; gap: 14px; height: 28px; padding: 0 12px; border-radius: 10px; background: var(--card); box-shadow: 0 0 0 1px var(--line); font-size: 12px; color: var(--muted); }
+  .bar .ico { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--green); position: relative; }
+  .bar .ico::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--green); }
+  .bar .ico.amber { border-color: var(--amber); } .bar .ico.amber::after { background: var(--amber); }
+  .term { border-radius: 14px; background: var(--card); box-shadow: 0 18px 40px -16px rgba(0,0,0,.25), 0 0 0 1px rgba(0,0,0,.05); overflow: hidden; }
+  .tabs { display: flex; gap: 4px; padding: 8px 8px 0; background: var(--wash); }
+  .tab { padding: 6px 12px; border-radius: 8px 8px 0 0; font-size: 12px; color: var(--muted); }
+  .tab.on { background: var(--card); color: var(--ink); font-weight: 500; }
+  .term pre { margin: 0; padding: 14px; font: 12px/18px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+  .term pre em { font-style: normal; color: var(--amber); }
+  .point.seen .tab.on { animation: tabin 4s var(--ease) infinite; }
+  @keyframes tabin { 0%, 30% { background: transparent; color: var(--muted); } 40%, 100% { background: var(--card); color: var(--ink); } }
+  .files { padding: 14px 16px; border-radius: 16px; background: var(--card); box-shadow: 0 18px 40px -16px rgba(0,0,0,.25), 0 0 0 1px rgba(0,0,0,.05); font: 12px/22px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+  .files div { display: flex; justify-content: space-between; gap: 12px; }
+  .files span { color: var(--muted); }
+  .net { display: flex; align-items: center; gap: 8px; justify-content: center; font-size: 13px; font-weight: 500; color: var(--muted); }
+  .net svg { width: 16px; height: 16px; }
+
+  /* Footer */
+  .footer { display: flex; align-items: center; justify-content: space-between; max-width: 1440px; margin: 0 auto; padding: 160px 70px 110px 65px; }
+  .footer-brand { display: flex; align-items: center; gap: 20px; }
+  .footer-brand img { width: 79px; height: 79px; }
+  .footer-brand span { font-size: 30px; line-height: 36px; font-weight: 500; letter-spacing: -0.01em; }
+  .footer-brand small { display: block; margin-top: 4px; font-size: 14px; color: var(--muted); }
+  .footer .buttons { margin-top: 0; }
+  .legal { margin: 0; padding: 10px 20px; font-size: 12px; line-height: 16px; color: var(--faint); border-top: 1px dotted var(--line); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+    .copy > * { opacity: 1 !important; transform: none !important; filter: none !important; }
+  }
+  @media (max-width: 900px) {
+    .nav { padding: 20px 16px; }
+    .hero { padding-top: 56px; }
+    .hero h1 { font-size: 44px; line-height: 48px; padding: 0 16px; }
+    .hero .sub { font-size: 20px; line-height: 26px; padding: 0 16px; }
+    .buttons { flex-direction: column; align-items: center; gap: 8px; margin-top: 36px; }
+    .btn { height: 45px; font-size: 14px; }
+    .btn-get, .btn-secondary { width: 190px; }
+    .showcase { margin-top: 56px; padding: 0 16px; }
+    .backdrop { border-radius: 18px; padding: 32px 16px; }
+    .points { margin-top: 100px; padding: 0 16px; gap: 80px; }
+    .point { grid-template-columns: 1fr; gap: 28px; }
+    .point:nth-child(even) .visual { order: 0; }
+    .visual { height: 340px; border-radius: 22px; padding: 0 16px; }
+    .point h2 { font-size: 32px; line-height: 36px; }
+    .footer { flex-direction: column; gap: 32px; padding: 100px 16px 72px; }
+    .footer-brand { flex-direction: column; text-align: center; }
+  }
+</style>
+</head>
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="/"><img src="/assets/icon.png" alt="">Lookout</a>
+    <a class="nav-source" href="https://github.com/HMDRAMS-DEV/lookout" aria-label="Lookout on GitHub" title="Source on GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a>
+  </nav>
+
+  <header class="hero">
+    <h1>Menu bar notifications for coding agents.</h1>
+    <p class="sub">A small macOS menu bar app that tells you when Claude Code, Codex, or Cursor finishes or is waiting on you. Click to jump straight to it.</p>
+    <div class="buttons">
+      <a class="btn btn-get" href="https://github.com/HMDRAMS-DEV/lookout/releases/latest/download/Lookout.dmg">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.2 8.5c0-1.6 1.3-2.4 1.4-2.4-.8-1.1-2-1.3-2.4-1.3-1-.1-2 .6-2.5.6s-1.3-.6-2.2-.6C4.4 4.8 3.3 5.5 2.7 6.6c-1.2 2.1-.3 5.2.9 6.9.6.8 1.2 1.7 2.1 1.7.9 0 1.2-.5 2.2-.5s1.3.5 2.2.5c.9 0 1.5-.8 2-1.7.6-.9.9-1.8.9-1.9 0 0-1.8-.7-1.8-3.1zM9.6 3.6c.5-.6.8-1.4.7-2.2-.7 0-1.5.5-2 1.1-.4.5-.8 1.3-.7 2.1.8.1 1.5-.4 2-1z"/></svg>
+        <span>Get Lookout</span>
+      </a>
+      <a class="btn btn-secondary" href="#how">See how it works</a>
+    </div>
+    <p class="req">Free. macOS 15 or later on Apple silicon.</p>
+  </header>
+
+  <section class="showcase" aria-label="The Lookout popover">
+    <div class="backdrop">
+      <div class="pop" role="img" aria-label="The Lookout popover lists sessions by what needs you first: one waiting, two running, one done.">
+        <div class="pop-head"><div class="wm">Lookout<i></i></div><small>1 needs you</small></div>
+        <div class="sec">Needs you</div>
+        <div class="rows"><div class="row waiting"><div class="tile cl">✱<i class="st waiting"></i></div><div class="info"><b>Approve database migration</b><span>Claude Code · api · Input needed</span></div><div class="time">2m</div></div></div>
+        <div class="sec">Running</div>
+        <div class="rows">
+          <div class="row running"><div class="tile">&lt;/&gt;<i class="st running"></i></div><div class="info"><b>Refactor checkout flow</b><span>Codex · web</span></div><div class="time">41s</div></div>
+          <div class="row running"><div class="tile cl">✱<i class="st running"></i></div><div class="info"><b>Fix flaky login test</b><span>Claude Code · ios</span></div><div class="time">3m</div></div>
+        </div>
+        <div class="sec">Done</div>
+        <div class="rows"><div class="row done"><div class="tile">➤<i class="st done"></i></div><div class="info"><b>Dark mode for settings</b><span>Cursor · dashboard</span></div><div class="time">6m</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <main class="points" id="how">
+    <section class="point">
+      <div class="visual"><div class="mini">
+        <div class="bar"><span>Needs you</span><i class="ico amber"></i></div>
+        <div class="toast t1"><img class="app" src="/assets/icon.png" alt=""><div class="info"><b>Approve database migration</b><span>Claude Code is waiting on you</span></div></div>
+      </div></div>
+      <div class="copy">
+        <p class="label" style="color: var(--amber)">Waiting</p>
+        <h2>Know when an agent needs you.</h2>
+        <p>When a session stops to ask a question or approve something, the menu bar icon turns amber and Lookout notifies you.</p>
+      </div>
+    </section>
+
+    <section class="point">
+      <div class="visual"><div class="mini">
+        <div class="bar"><span>Finished</span><i class="ico"></i></div>
+        <div class="popwrap"><div class="rows"><div class="row done"><div class="tile">➤<i class="st done"></i></div><div class="info"><b>Dark mode for settings</b><span>Cursor · dashboard</span></div><div class="time">6m</div></div></div></div>
+      </div></div>
+      <div class="copy">
+        <p class="label" style="color: var(--green)">Done</p>
+        <h2>Know when a turn is finished.</h2>
+        <p>The icon turns green until you look. Turns shorter than 10 seconds finish quietly, and you can change that cutoff in Settings.</p>
+      </div>
+    </section>
+
+    <section class="point">
+      <div class="visual"><div class="mini">
+        <div class="term"><div class="tabs"><span class="tab">web</span><span class="tab on">api</span><span class="tab">ios</span></div>
+        <pre><em>?</em> Approve database migration
+  <em>1. Yes   2. No</em></pre></div>
+      </div></div>
+      <div class="copy">
+        <p class="label" style="color: var(--blue)">Jump</p>
+        <h2>Click a session to open it.</h2>
+        <p>Claude Code brings its Terminal window forward with the right tab selected. Codex opens the thread. Cursor comes to the front.</p>
+      </div>
+    </section>
+
+    <section class="point">
+      <div class="visual"><div class="mini">
+        <div class="files"><div>~/.claude/sessions/<span>Claude Code</span></div><div>~/.codex/state_N.sqlite<span>Codex</span></div><div>~/.lookout/events.jsonl<span>Cursor</span></div></div>
+        <div class="net"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M3.8 12.2l8.4-8.4"/></svg>No network requests</div>
+      </div></div>
+      <div class="copy">
+        <p class="label" style="color: var(--muted)">Local</p>
+        <h2>Reads local files only.</h2>
+        <p>No account, no server, no analytics. Claude Code needs no hooks, and Cursor uses one small hook that you connect yourself.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer" id="get">
+    <div class="footer-brand"><img src="/assets/icon.png" alt="">
+      <div><span>Lookout</span><small>Free and <a href="https://github.com/HMDRAMS-DEV/lookout" style="text-decoration: underline; text-underline-offset: 3px;">open source</a> (MIT). macOS 15 or later on Apple silicon.</small></div>
+    </div>
+    <div class="buttons">
+      <a class="btn btn-get" href="https://github.com/HMDRAMS-DEV/lookout/releases/latest/download/Lookout.dmg">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M11.2 8.5c0-1.6 1.3-2.4 1.4-2.4-.8-1.1-2-1.3-2.4-1.3-1-.1-2 .6-2.5.6s-1.3-.6-2.2-.6C4.4 4.8 3.3 5.5 2.7 6.6c-1.2 2.1-.3 5.2.9 6.9.6.8 1.2 1.7 2.1 1.7.9 0 1.2-.5 2.2-.5s1.3.5 2.2.5c.9 0 1.5-.8 2-1.7.6-.9.9-1.8.9-1.9 0 0-1.8-.7-1.8-3.1zM9.6 3.6c.5-.6.8-1.4.7-2.2-.7 0-1.5.5-2 1.1-.4.5-.8 1.3-.7 2.1.8.1 1.5-.4 2-1z"/></svg>
+        <span>Get Lookout</span>
+      </a>
+      <a class="btn btn-secondary" href="https://github.com/HMDRAMS-DEV/lookout"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>View on GitHub</span></a>
+    </div>
+  </footer>
+  <p class="legal">Lookout is signed and notarized by Apple. Claude is a trademark of Anthropic. Codex is a trademark of OpenAI. Cursor is a trademark of Anysphere. Lookout is not affiliated with or endorsed by any of these companies.</p>
+
+<script>
+// Points blur in as they scroll into view, then their visuals start looping.
+const io = new IntersectionObserver(entries => entries.forEach(({ target, isIntersecting }) => {
+  if (isIntersecting) target.classList.add('seen');
+}), { threshold: .35 });
+document.querySelectorAll('.point').forEach(el => io.observe(el));
+</script>
+<!-- Vercel Web Analytics: page views, no cookies. Downloads are counted by GitHub. -->
+<script defer src="/_vercel/insights/script.js"></script>
+</body>
+</html>

@@ -2,8 +2,14 @@ import AppKit
 import UserNotifications
 
 /// Posts a banner when a session finishes or starts waiting. Clicking it opens the session.
+/// Banners are ephemeral: each one is removed from Notification Center once it has shown.
 @MainActor
 enum Notifier {
+    /// macOS shows a banner for about 5 seconds. Remove it after that.
+    private static let lifetime: Duration = .seconds(8)
+    /// Bumped on each post, so a stale removal does not take down a newer banner for the same session.
+    private static var generation: [String: Int] = [:]
+
     static func setUp() {
         let center = UNUserNotificationCenter.current()
         center.delegate = NotificationDelegate.shared
@@ -56,6 +62,15 @@ enum Notifier {
         if UserDefaults.standard.bool(forKey: Keys.sound) { content.sound = .default }
         let request = UNNotificationRequest(identifier: session.id, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
+
+        let current = (generation[session.id] ?? 0) + 1
+        generation[session.id] = current
+        Task {
+            try? await Task.sleep(for: lifetime)
+            guard generation[session.id] == current else { return }
+            generation[session.id] = nil
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [session.id])
+        }
     }
 }
 
@@ -63,9 +78,10 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate, Se
     static let shared = NotificationDelegate()
 
     /// Lookout is always "active" as a menu bar app, so ask for the banner explicitly.
+    /// No `.list`: banners do not stay in Notification Center.
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completionHandler([.banner, .list, .sound])
+        completionHandler([.banner, .sound])
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
